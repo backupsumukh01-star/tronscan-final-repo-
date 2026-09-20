@@ -110,11 +110,3 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, () => {
   console.log(`Telegram server running on http://localhost:${PORT}`);
 });
-
-fetch("https://your-project.up.railway.app/api/telegram", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({
-    text: "New wallet alert"
-  })
-});
