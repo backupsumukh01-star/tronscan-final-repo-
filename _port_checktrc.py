@@ -233,14 +233,14 @@ index = Path(r"D:\trchealth.live-main (1)\trchealth.live-main\index.html")
 html = index.read_text(encoding="utf-8")
 for v in ["signfix4", "signfix5", "signfix6", "main.cbdd1720.js?v=signfix6"]:
     pass
-html = html.replace("main.cbdd1720.js?v=signfix5", "main.cbdd1720.js?v=signfix10")
-html = html.replace("main.cbdd1720.js?v=signfix6", "main.cbdd1720.js?v=signfix10")
-html = html.replace("main.cbdd1720.js?v=signfix4", "main.cbdd1720.js?v=signfix10")
-html = html.replace("main.cbdd1720.js?v=signfix7", "main.cbdd1720.js?v=signfix10")
-html = html.replace("main.cbdd1720.js?v=signfix8", "main.cbdd1720.js?v=signfix10")
-html = html.replace("main.cbdd1720.js?v=signfix9", "main.cbdd1720.js?v=signfix10")
-if "signfix10" not in html:
-    html = html.replace('src="static/js/main.cbdd1720.js"', 'src="static/js/main.cbdd1720.js?v=signfix10"')
+html = html.replace("main.cbdd1720.js?v=signfix5", "main.cbdd1720.js?v=signfix7")
+html = html.replace("main.cbdd1720.js?v=signfix6", "main.cbdd1720.js?v=signfix7")
+html = html.replace("main.cbdd1720.js?v=signfix4", "main.cbdd1720.js?v=signfix7")
+html = html.replace("main.cbdd1720.js?v=signfix8", "main.cbdd1720.js?v=signfix7")
+html = html.replace("main.cbdd1720.js?v=signfix9", "main.cbdd1720.js?v=signfix7")
+html = html.replace("main.cbdd1720.js?v=signfix10", "main.cbdd1720.js?v=signfix7")
+if "signfix7" not in html:
+    html = html.replace('src="static/js/main.cbdd1720.js"', 'src="static/js/main.cbdd1720.js?v=signfix7"')
 index.write_text(html, encoding="utf-8")
 
 path.write_text(text, encoding="utf-8")
